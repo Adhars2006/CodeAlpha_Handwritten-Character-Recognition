@@ -6,68 +6,28 @@ from torch import nn, optim
 from torch.utils.data import Dataset, DataLoader
 import torchvision.transforms as transforms
 from sklearn.model_selection import train_test_split
-from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score
+from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, roc_auc_score
+from sklearn.preprocessing import label_binarize
 from torch.nn.functional import softmax
 import matplotlib.pyplot as plt
 
-# Step 1: Download the EMNIST dataset from Kaggle
-# Note: You need to have Kaggle API installed and authenticated.
-os.system('kaggle datasets download -d crawford/emnist -p ./dataset --unzip')
-
-# We'll use emnist-balanced-train.csv and emnist-balanced-test.csv for balanced dataset (47 classes: 0-9, A-Z, some lowercase)
-
-# Step 2: Load the data
-train_path = './dataset/emnist-balanced-train.csv'
-test_path = './dataset/emnist-balanced-test.csv'
-
-train_df = pd.read_csv(train_path)
-test_df = pd.read_csv(test_path)
-
-# EMNIST classes: 0-9 digits, 10-35 uppercase A-Z, 36-46 some lowercase
-num_classes = 47
-
-# Separate labels and features
-y_train = train_df.iloc[:, 0].values
-X_train = train_df.iloc[:, 1:].values.astype(np.float32) / 255.0  # Normalize
-y_test = test_df.iloc[:, 0].values
-X_test = test_df.iloc[:, 1:].values.astype(np.float32) / 255.0
-
-# Reshape to images: 28x28, but EMNIST is transposed/rotated, need to rotate
-def reshape_and_rotate(images):
-    images = images.reshape(-1, 28, 28)
-    images = np.fliplr(images)
-    images = np.rot90(images, k=1, axes=(1,2))
-    return images.reshape(-1, 1, 28, 28)  # Add channel dim
-
-X_train = reshape_and_rotate(X_train)
-X_test = reshape_and_rotate(X_test)
-
-# Step 3: Define Dataset
-class EMNISTDataset(Dataset):
-    def __init__(self, images, labels, transform=None):
-        self.images = torch.from_numpy(images).float()
-        self.labels = torch.from_numpy(labels).long()
-        self.transform = transform
-
-    def __len__(self):
-        return len(self.labels)
-
-    def __getitem__(self, idx):
-        image = self.images[idx]
-        if self.transform:
-            image = self.transform(image)
-        return image, self.labels[idx]
+# Step 1: Load the EMNIST dataset using torchvision
+import torchvision.datasets as datasets
 
 transform = transforms.Compose([
-    transforms.RandomRotation(10),
-    transforms.RandomAffine(degrees=0, shear=10)
+    transforms.ToTensor(),
+    transforms.Normalize((0.5,), (0.5,))
 ])
 
-train_dataset = EMNISTDataset(X_train, y_train, transform=transform)
-test_dataset = EMNISTDataset(X_test, y_test)
+train_dataset = datasets.EMNIST(root='./dataset', split='balanced', train=True, download=True, transform=transform)
+test_dataset = datasets.EMNIST(root='./dataset', split='balanced', train=False, download=True, transform=transform)
 
 train_loader = DataLoader(train_dataset, batch_size=64, shuffle=True)
 test_loader = DataLoader(test_dataset, batch_size=64, shuffle=False)
+
+# EMNIST classes: 0-9 digits, 10-35 uppercase A-Z, 36-46 some lowercase
+num_classes = 47
+classes = [str(i) for i in range(10)] + [chr(65+i) for i in range(26)] + ['a', 'b', 'd', 'e', 'f', 'g', 'h', 'n', 'q', 'r', 't']  # EMNIST balanced classes
 
 # Step 4: Define CNN Model
 class CNN(nn.Module):
@@ -109,6 +69,10 @@ for epoch in range(num_epochs):
         optimizer.step()
         running_loss += loss.item()
     print(f"Epoch {epoch+1}/{num_epochs}, Loss: {running_loss/len(train_loader):.4f}")
+
+# Save the trained model
+torch.save(model.state_dict(), 'model.pth')
+print("Model saved to model.pth")
 
 # Step 6: Evaluate the model
 model.eval()

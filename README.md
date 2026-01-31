@@ -66,6 +66,18 @@ pip install torch torchvision pandas numpy scikit-learn matplotlib kaggle
 
 ## Usage
 
+To train the model:
+```
+python model.py
+```
+
+To run the UI:
+```
+streamlit run ui.py
+```
+
+Then open the provided URL in your browser to upload images and get predictions.
+
 Run the training/evaluation pipeline:
 
 python model.py
